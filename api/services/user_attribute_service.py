@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from api import db, models
@@ -17,6 +18,15 @@ class UserAttributeService:
                 self.user_id
             )
             for field_key, field_value in contact_fields_data.items():
+                if not re.match(r"^\w+$", field_key):
+                    logger.error(
+                        f"Found a contact variable {field_key} for {self.user_phone} "
+                        "with special character which can't be processed."
+                    )
+                    continue
+                elif field_key.lower() == "name":
+                    continue
+
                 value = field_value.get("value")
                 user_attribute = existing_attributes.get(field_key)
 
