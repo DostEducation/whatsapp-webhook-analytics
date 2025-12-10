@@ -31,7 +31,6 @@ class MessageTransactionService:
         Later you can extend this for Bhashini messages when those
         fields are available in the payload.
         """
-
         try:
             current_time = common_helper.get_current_utc_timestamp()
 
