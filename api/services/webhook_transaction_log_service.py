@@ -37,6 +37,6 @@ class WebhookTransactionLogService:
             return webhook_log
         except Exception as e:
             logger.error(
-                f"Error while marking webhook log as processed." f"Error message: {e}"
+                f"Error marking webhook log as processed." f"Error message: {e}"
             )
             return None
