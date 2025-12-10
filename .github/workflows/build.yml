@@ -36,12 +36,12 @@ jobs:
           FLASK_APP: ${{ secrets.FLASK_APP }}
           FLASK_ENV: ${{ secrets.FLASK_ENV_STAGING }}
         run: |
-          # Proxy uses ADC from auth@v2; no credential_file needed
-          wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
-          chmod +x cloud_sql_proxy
+          # Download Cloud SQL Proxy v2
+          wget https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.3/cloud-sql-proxy.linux.amd64 -O cloud-sql-proxy
+          chmod +x cloud-sql-proxy
 
-          ./cloud_sql_proxy \
-            -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION }}=tcp:5432 &
+          # Start proxy using ADC from auth@v2
+          ./cloud-sql-proxy "${{ secrets.CONNECTION_NAME_GITHUB_ACTION }}?port=5432" &
           PROXY_PID=$!
 
           # Wait for proxy to be ready
@@ -98,11 +98,10 @@ jobs:
           FLASK_APP: ${{ secrets.FLASK_APP }}
           FLASK_ENV: ${{ secrets.FLASK_ENV_PROD }}
         run: |
-          wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
-          chmod +x cloud_sql_proxy
+          wget https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.3/cloud-sql-proxy.linux.amd64 -O cloud-sql-proxy
+          chmod +x cloud-sql-proxy
 
-          ./cloud_sql_proxy \
-            -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION_PROD }}=tcp:5432 &
+          ./cloud-sql-proxy "${{ secrets.CONNECTION_NAME_GITHUB_ACTION_PROD }}?port=5432" &
           PROXY_PID=$!
 
           for i in {1..10}; do
