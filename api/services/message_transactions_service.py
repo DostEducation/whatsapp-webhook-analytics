@@ -24,18 +24,21 @@ class MessageTransactionService:
     def capture_from_webhook(self, json_data: dict[str, Any]) -> None:
         """Parse the webhook payload and create message transaction records.
 
-        For now we handle:
-          - user_ask       -> User -> GPT
-          - ai_response    -> GPT -> User
-
-        Later you can extend this for Bhashini messages when those
-        fields are available in the payload.
+        Currently handles:
+          - user_ask                    -> User -> GPT
+          - ai_response                 -> GPT -> User
+          - user_ask                    -> User -> Bhashini
+          - bahshini_stt_translation    -> Bhashini -> GPT
+          - ai_response                 -> GPT -> Bhashini
+          - bahshini_tts_translation    -> Bhashini -> User
         """
         try:
             current_time = common_helper.get_current_utc_timestamp()
 
             user_ask: Optional[str] = json_data.get("user_ask")
             ai_response: Optional[str] = json_data.get("ai_response")
+            bhashini_stt: Optional[str] = json_data.get("bahshini_stt_translation")
+            bhashini_tts: Optional[str] = json_data.get("bahshini_tts_translation")
 
             flow_uuid = json_data.get("flow_uuid")
             flow_name = json_data.get("flow_name")
@@ -45,7 +48,9 @@ class MessageTransactionService:
 
             entry_activity_key = self._extract_entry_activity_key(json_data)
 
+            # ---------- User <-> GPT ----------
             if user_ask:
+                # User -> GPT
                 self._create_message_transaction(
                     source=models.ActorType.USER,
                     destination=models.ActorType.GPT,
@@ -61,10 +66,77 @@ class MessageTransactionService:
                 )
 
             if ai_response:
+                # GPT -> User
                 self._create_message_transaction(
                     source=models.ActorType.GPT,
                     destination=models.ActorType.USER,
                     message_text=ai_response,
+                    current_time=current_time,
+                    flow_uuid=flow_uuid,
+                    flow_name=flow_name,
+                    flow_type=flow_type,
+                    flow_status=flow_status,
+                    organization_id=organization_id,
+                    entry_activity_key=entry_activity_key,
+                    raw_payload=json_data,
+                )
+
+            # ---------- User <-> Bhashini ----------
+            if user_ask:
+                # User -> Bhashini (same original user text, before STT/translation)
+                self._create_message_transaction(
+                    source=models.ActorType.USER,
+                    destination=models.ActorType.BHASHINI,
+                    message_text=user_ask,
+                    current_time=current_time,
+                    flow_uuid=flow_uuid,
+                    flow_name=flow_name,
+                    flow_type=flow_type,
+                    flow_status=flow_status,
+                    organization_id=organization_id,
+                    entry_activity_key=entry_activity_key,
+                    raw_payload=json_data,
+                )
+
+            if bhashini_stt:
+                # Bhashini -> GPT (STT/translation output that GPT actually sees)
+                self._create_message_transaction(
+                    source=models.ActorType.BHASHINI,
+                    destination=models.ActorType.GPT,
+                    message_text=bhashini_stt,
+                    current_time=current_time,
+                    flow_uuid=flow_uuid,
+                    flow_name=flow_name,
+                    flow_type=flow_type,
+                    flow_status=flow_status,
+                    organization_id=organization_id,
+                    entry_activity_key=entry_activity_key,
+                    raw_payload=json_data,
+                )
+
+            # ---------- GPT <-> Bhashini ----------
+            if ai_response:
+                # GPT -> Bhashini (text that will be turned into TTS)
+                self._create_message_transaction(
+                    source=models.ActorType.GPT,
+                    destination=models.ActorType.BHASHINI,
+                    message_text=ai_response,
+                    current_time=current_time,
+                    flow_uuid=flow_uuid,
+                    flow_name=flow_name,
+                    flow_type=flow_type,
+                    flow_status=flow_status,
+                    organization_id=organization_id,
+                    entry_activity_key=entry_activity_key,
+                    raw_payload=json_data,
+                )
+
+            if bhashini_tts:
+                # Bhashini -> User (final synthesized response)
+                self._create_message_transaction(
+                    source=models.ActorType.BHASHINI,
+                    destination=models.ActorType.USER,
+                    message_text=bhashini_tts,
                     current_time=current_time,
                     flow_uuid=flow_uuid,
                     flow_name=flow_name,
