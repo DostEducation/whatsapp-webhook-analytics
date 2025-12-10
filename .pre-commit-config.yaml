@@ -27,7 +27,7 @@ repos:
         exclude: __init__.py
         args: [--max-line-length=88]
 - repo: https://github.com/PyCQA/docformatter
-  rev: v1.7.5
+  rev: master
   hooks:
     - id: docformatter
 -   repo: https://github.com/pre-commit/pygrep-hooks
