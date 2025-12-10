@@ -8,3 +8,4 @@ from .user_flows import *
 from .user_indicator_responses import *
 from .users import *
 from .webhook_transaction_log import *
+from .message_transactions import *
