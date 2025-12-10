@@ -8,6 +8,7 @@ from api.services import (
     UserCreationService,
     UserIndicatorResponseService,
     WebhookTransactionLogService,
+    MessageTransactionService,
 )
 from api.utils.loggingutils import logger
 
@@ -22,8 +23,11 @@ def handle_payload(request):
                 if not json_data:
                     return "The request cannot be processed", 400
 
-                handle_webhook(json_data)
-                return "Success", 200
+                webhook_log = handle_webhook(json_data)
+                return {
+                    "success_message": f"You are onboarded.{webhook_log.id}",
+                    "status_code": 200,
+                }, 200
             except Exception as e:
                 logger.error(
                     f"Exception while handling the webhook payload: {json_data}"
@@ -48,8 +52,11 @@ def handle_webhook(json_data):
         handle_flow_activity_data(user, user_flow, json_data)
         process_user_indicators(user, user_flow, json_data)
         process_contact_data(user, contact_data)
+        message_tx_service = MessageTransactionService(user, user_flow)
+        message_tx_service.capture_from_webhook(json_data)
 
-    transaction_log_service.mark_webhook_log_as_processed(webhook_log)
+    webhook_log = transaction_log_service.mark_webhook_log_as_processed(webhook_log)
+    return webhook_log
 
 
 def handle_user_creation_from_contact(contact_data):
