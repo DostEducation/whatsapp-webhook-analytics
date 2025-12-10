@@ -3,13 +3,13 @@ name: build-and-deployment
 on:
   push:
     branches:
-      - fix/github-action-for-cloud-function-deplyment
+      - develop
       - main
 
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/fix/github-action-for-cloud-function-deplyment'
+    if: github.ref == 'refs/heads/develop'
     steps:
       - uses: actions/checkout@v4
 
