@@ -11,130 +11,98 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/fix/github-action-for-cloud-function-deplyment'
     steps:
-    - uses: 'actions/checkout@v4'
-    - id: 'auth'
-      name: 'Authenticate to Google Cloud'
-      uses: 'google-github-actions/auth@v2'
-      with:
-        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+      - uses: actions/checkout@v4
 
-    - name: 'Set up Cloud SDK'
-      uses: 'google-github-actions/setup-gcloud@v2'
-      with:
-        version: '>= 363.0.0'
-    - name: 'Use gcloud CLI'
-      run: 'gcloud info'
-    - name: Install Python dependencies
-      run: |
-        pip install -r requirements.txt
-    - name: Set up Cloud SQL Proxy
-      run: |
-        wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
-        chmod +x cloud_sql_proxy
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-    - name: Start Cloud SQL Proxy
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-      run: |
-        echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
-        ./cloud_sql_proxy -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION }}=tcp:5432 -credential_file=credentials.json &
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: '>= 363.0.0'
 
-    - name: Run DB migrations via Cloud SQL Proxy (staging)
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-        SQLALCHEMY_DATABASE_URI: ${{ secrets.SQLALCHEMY_DATABASE_URI }}
-        FLASK_APP: ${{ secrets.FLASK_APP }}
-        FLASK_ENV: ${{ secrets.FLASK_ENV_STAGING }}
-      run: |
-        # Write SA JSON to file
-        echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
+      - name: Use gcloud CLI
+        run: gcloud info
 
-        # Download proxy (v1; optional: switch to v2 cloud-sql-proxy)
-        wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
-        chmod +x cloud_sql_proxy
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
 
-        # Start proxy in background
-        ./cloud_sql_proxy \
-          -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION }}=tcp:5432 \
-          -credential_file=credentials.json &
-        PROXY_PID=$!
+      - name: Run DB migrations via Cloud SQL Proxy (staging)
+        env:
+          SQLALCHEMY_DATABASE_URI: ${{ secrets.SQLALCHEMY_DATABASE_URI }}
+          FLASK_APP: ${{ secrets.FLASK_APP }}
+          FLASK_ENV: ${{ secrets.FLASK_ENV_STAGING }}
+        run: |
+          # Proxy uses ADC from auth@v2; no credential_file needed
+          wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
+          chmod +x cloud_sql_proxy
 
-        # Wait for proxy to be ready (cheap health check)
-        for i in {1..10}; do
-          nc -z 127.0.0.1 5432 && echo "Proxy is up" && break
-          echo "Waiting for proxy..."
-          sleep 2
-        done
+          ./cloud_sql_proxy \
+            -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION }}=tcp:5432 &
+          PROXY_PID=$!
 
-        # Run migrations
-        flask db upgrade
+          # Wait for proxy to be ready
+          for i in {1..10}; do
+            nc -z 127.0.0.1 5432 && echo "Proxy is up" && break
+            echo "Waiting for proxy..."
+            sleep 2
+          done
 
-        # Clean up proxy
-        kill $PROXY_PID || echo "Proxy already stopped"
+          # Run migrations
+          flask db upgrade
 
-    - name: Stop Cloud SQL Proxy
-      run: |
-        pkill cloud_sql_proxy
+          # Clean up proxy
+          kill $PROXY_PID || echo "Proxy already stopped"
 
-    - name: 'Deploying staging whatsapp webhook analytics function'
-      run: |
-        gcloud functions deploy whatsapp-webhook-analytics-staging \
-          --gen2 \
-          --runtime=python312 \
-          --region=asia-south1 \
-          --trigger-http \
-          --entry-point=handle_payload \
-          --memory=256MB \
-          --timeout=30s \
-          --set-env-vars=FLASK_ENV=${{ secrets.FLASK_ENV_STAGING }},LOGGING_LEVEL=${{ secrets.LOGGING_LEVEL }},SQLALCHEMY_DATABASE_URI=${{ secrets.SQLALCHEMY_DATABASE_URI_STAGING }}
+      - name: Deploying staging whatsapp webhook analytics function
+        run: |
+          gcloud functions deploy whatsapp-webhook-analytics-staging \
+            --gen2 \
+            --runtime=python312 \
+            --region=asia-south1 \
+            --trigger-http \
+            --entry-point=handle_payload \
+            --memory=256MB \
+            --timeout=30s \
+            --set-env-vars=FLASK_ENV=${{ secrets.FLASK_ENV_STAGING }},LOGGING_LEVEL=${{ secrets.LOGGING_LEVEL }},SQLALCHEMY_DATABASE_URI=${{ secrets.SQLALCHEMY_DATABASE_URI_STAGING }}
 
   deploy-production:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: 'actions/checkout@v4'
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@v2'
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@v2'
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
         with:
           version: '>= 363.0.0'
-      - name: 'Use gcloud CLI'
-        run: 'gcloud info'
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
-      - name: Set up Cloud SQL Proxy
-        run: |
-          wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
-          chmod +x cloud_sql_proxy
 
-      - name: Start Cloud SQL Proxy
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-        run: |
-          echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
-          ./cloud_sql_proxy -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION_PROD }}=tcp:5432 -credential_file=credentials.json &
+      - name: Use gcloud CLI
+        run: gcloud info
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
 
       - name: Run DB migrations via Cloud SQL Proxy (prod)
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
           SQLALCHEMY_DATABASE_URI: ${{ secrets.SQLALCHEMY_DATABASE_URI_PROD }}
           FLASK_APP: ${{ secrets.FLASK_APP }}
           FLASK_ENV: ${{ secrets.FLASK_ENV_PROD }}
         run: |
-          echo "$GOOGLE_APPLICATION_CREDENTIALS" > credentials.json
-
           wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
           chmod +x cloud_sql_proxy
 
           ./cloud_sql_proxy \
-            -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION_PROD }}=tcp:5432 \
-            -credential_file=credentials.json &
+            -instances=${{ secrets.CONNECTION_NAME_GITHUB_ACTION_PROD }}=tcp:5432 &
           PROXY_PID=$!
 
           for i in {1..10}; do
@@ -147,11 +115,7 @@ jobs:
 
           kill $PROXY_PID || echo "Proxy already stopped"
 
-      - name: Stop Cloud SQL Proxy
-        run: |
-          pkill cloud_sql_proxy
-
-      - name: 'Deploying production whatsapp webhook analytics function'
+      - name: Deploying production whatsapp webhook analytics function
         run: |
           gcloud functions deploy whatsapp-webhook-analytics-prod \
             --gen2 \
