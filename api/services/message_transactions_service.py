@@ -6,6 +6,11 @@ from api import db, models
 from api.helpers import common_helper
 from api.utils.loggingutils import logger
 
+BHASHINI_DESTINATION_FLOW_NAMES = {
+    "Bol Saathi AI \u2013 Open Q&A",
+    "Bol Saathi AI - Open Q&A",
+}
+
 
 class MessageTransactionService:
     """
@@ -45,6 +50,7 @@ class MessageTransactionService:
             flow_type = json_data.get("flow_type")
             flow_status = json_data.get("flow_status")
             organization_id = json_data.get("organization_id")
+            can_route_to_bhashini = self._can_route_to_bhashini_destination(flow_name)
 
             entry_activity_key = self._extract_entry_activity_key(json_data)
 
@@ -82,7 +88,7 @@ class MessageTransactionService:
                 )
 
             # ---------- User <-> Bhashini ----------
-            if user_ask:
+            if can_route_to_bhashini and user_ask:
                 # User -> Bhashini (same original user text, before STT/translation)
                 self._create_message_transaction(
                     source=models.ActorType.USER,
@@ -115,7 +121,7 @@ class MessageTransactionService:
                 )
 
             # ---------- GPT <-> Bhashini ----------
-            if ai_response:
+            if can_route_to_bhashini and ai_response:
                 # GPT -> Bhashini (text that will be turned into TTS)
                 self._create_message_transaction(
                     source=models.ActorType.GPT,
@@ -211,3 +217,8 @@ class MessageTransactionService:
             return None
 
         return sorted(activity_keys)[-1]
+
+    def _can_route_to_bhashini_destination(self, flow_name: Optional[str]) -> bool:
+        if not flow_name:
+            return False
+        return flow_name.strip() in BHASHINI_DESTINATION_FLOW_NAMES
